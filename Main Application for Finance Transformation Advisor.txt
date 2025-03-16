@@ -1,0 +1,139 @@
+"""
+Finance Transformation Advisor - Main Application
+------------------------------------------------
+Command-line application that leverages the Finance Transformation Agent system
+to analyze a company and generate tailored finance transformation recommendations.
+"""
+
+import os
+import json
+import argparse
+from datetime import datetime
+from typing import Optional
+
+from finance_transformation_agents import run_finance_transformation_advisor
+from dotenv import load_dotenv
+
+def save_report(report: dict, output_dir: Optional[str] = None) -> str:
+    """
+    Save the advisory report to a JSON file.
+    
+    Args:
+        report: The advisory report in dictionary format
+        output_dir: Directory to save the report to (default: current directory)
+        
+    Returns:
+        str: Path to the saved report file
+    """
+    if output_dir is None:
+        output_dir = os.getcwd()
+    
+    # Create the output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Generate a filename based on the company name and timestamp
+    company_name = report["company_name"].replace(" ", "_").lower()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{company_name}_finance_transformation_report_{timestamp}.json"
+    
+    # Full path to the output file
+    file_path = os.path.join(output_dir, filename)
+    
+    # Save the report to the file
+    with open(file_path, "w") as f:
+        json.dump(report, f, indent=2)
+    
+    return file_path
+
+def display_report_summary(report: dict) -> None:
+    """
+    Display a summary of the advisory report to the console.
+    
+    Args:
+        report: The advisory report in dictionary format
+    """
+    print("\n" + "=" * 80)
+    print(f"FINANCE TRANSFORMATION ADVISORY REPORT FOR {report['company_name'].upper()}")
+    print("=" * 80)
+    
+    print("\nEXECUTIVE SUMMARY:")
+    print("-----------------")
+    print(report["executive_summary"])
+    
+    print("\nTOP OPPORTUNITIES:")
+    print("-----------------")
+    # Sort opportunities by priority score and display the top 3
+    top_opportunities = sorted(
+        report["identified_opportunities"], 
+        key=lambda x: x["priority_score"], 
+        reverse=True
+    )[:3]
+    
+    for i, opp in enumerate(top_opportunities, 1):
+        print(f"{i}. {opp['category']} - {opp['service_offering']}")
+        print(f"   Value: {opp['potential_value']}, Complexity: {opp['implementation_complexity']}")
+        print(f"   {opp['description']}")
+        print()
+    
+    print("\nRECOMMENDED NEXT STEPS:")
+    print("----------------------")
+    for i, step in enumerate(report["next_steps"], 1):
+        print(f"{i}. {step}")
+    
+    print("\n" + "=" * 80)
+    print(f"Full report saved to: {save_report(report)}")
+    print("=" * 80 + "\n")
+
+def main():
+    """Main entry point for the application."""
+    # Set up argument parsing
+    parser = argparse.ArgumentParser(
+        description="Finance Transformation Advisor - Generate tailored finance transformation recommendations"
+    )
+    parser.add_argument(
+        "company_name",
+        help="Name of the company to analyze"
+    )
+    parser.add_argument(
+        "--output-dir", "-o",
+        help="Directory to save the output report to",
+        default=None
+    )
+    parser.add_argument(
+        "--verbose", "-v",
+        help="Enable verbose output",
+        action="store_true"
+    )
+    
+    # Parse arguments
+    args = parser.parse_args()
+    
+    # Load environment variables
+    load_dotenv()
+    
+    # Check for OpenAI API key
+    if not os.getenv("OPENAI_API_KEY"):
+        print("Error: OPENAI_API_KEY environment variable not set.")
+        print("Please set your OpenAI API key in the .env file or environment.")
+        return 1
+    
+    # Run the workflow
+    print(f"Analyzing {args.company_name}...")
+    print("This may take a few minutes as we gather and analyze information...")
+    
+    try:
+        report = run_finance_transformation_advisor(args.company_name)
+        
+        # Save and display the report
+        file_path = save_report(report, args.output_dir)
+        display_report_summary(report)
+        
+        print(f"Analysis complete! Full report saved to: {file_path}")
+        return 0
+        
+    except Exception as e:
+        print(f"Error during analysis: {e}")
+        return 1
+
+if __name__ == "__main__":
+    exit(main())
